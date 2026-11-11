@@ -16,13 +16,11 @@
 
 ### A1. Agent này làm được gì
 
-> 1–2 câu mô tả agent dùng để làm gì (cho team khác hiểu nhanh).
-
-Ví dụ: "Research agent: tìm tin theo từ khóa / theo tài khoản, đọc URL, tổng hợp thành digest, và gửi lên Telegram khi được xác nhận."
+BLG Research Agent hỗ trợ tìm kiếm và tổng hợp thông tin từ web, Twitter/X, Hacker News và arXiv; đồng thời có thể đọc URL và tra cứu chính sách nội bộ. Agent có thể trình bày kết quả thành digest và chỉ gửi bản tin lên Telegram sau khi người dùng xác nhận.
 
 **Cách chạy UI:**
 
-> Lệnh chạy UI (ví dụ `streamlit run app.py`) và dependency đã thêm vào `starter_v0/requirements.txt`.
+> Từ thư mục `starter_v0/`, chạy `python -m http.server 8000`, rồi mở `http://localhost:8000/demo_cp5.html` trên trình duyệt. Chọn **Tải run JSON** và tải một file `runs/*.json` để xem metric, lọc test case và đối chiếu expected/actual. Đây là dashboard xem kết quả eval đã chạy, không phải giao diện chat trực tiếp với agent.
 
 **Link dùng thử (deploy):**
 
@@ -52,9 +50,10 @@ Ví dụ: "Research agent: tìm tin theo từ khóa / theo tài khoản, đọc 
 
 > 3–5 câu hỏi/yêu cầu mẫu để team khác tự thử agent ngay.
 
-1.
-2.
-3.
+1. Tìm tin tức mới nhất về AI agents trên web, rồi tóm tắt 3 điểm chính kèm nguồn.
+2. Tìm các bài thảo luận về Qwen trên Hacker News và cho biết bài nào được quan tâm nhất.
+3. Đọc nội dung bài viết tại https://arxiv.org/abs/1706.03762 và tóm tắt ý tưởng chính.
+4. Tìm các bài đăng gần đây của Sam Altman trên Twitter/X.
 
 ## 3. Giải pháp
 
