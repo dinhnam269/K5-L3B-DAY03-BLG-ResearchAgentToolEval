@@ -20,13 +20,15 @@ BLG Research Agent hỗ trợ tìm kiếm và tổng hợp thông tin từ web, 
 
 **Cách chạy UI:**
 
-> Từ thư mục `starter_v0/`, chạy `python -m http.server 8000`, rồi mở `http://localhost:8000/demo_cp5.html` trên trình duyệt. Chọn **Tải run JSON** và tải một file `runs/*.json` để xem metric, lọc test case và đối chiếu expected/actual. Đây là dashboard xem kết quả eval đã chạy, không phải giao diện chat trực tiếp với agent.
+- **UI Chat live với Agent (Streamlit — `starter_v0/app.py`):**
+  1. Cài dependency (đã khai báo `streamlit>=1.35.0` trong `starter_v0/requirements.txt`): `pip install -r requirements.txt`.
+  2. Chạy từ thư mục `starter_v0/`: `streamlit run app.py` → mở `http://localhost:8501` (chọn provider `ollama`, model `qwen2.5:3b` hoặc provider cloud có key trong `.env`). Giao diện hiển thị rõ từng tool call, tham số, kết quả và cảnh báo/lỗi tool (không che lỗi) và tự lưu transcript vào `starter_v0/transcripts/`.
+- **Dashboard xem kết quả Eval (`starter_v0/demo_cp5.html`):**
+  - Từ `starter_v0/`, chạy `python -m http.server 8000`, mở `http://localhost:8000/demo_cp5.html` rồi nạp file `runs/*.json` để xem metric và đối chiếu expected/actual.
 
 **Link dùng thử (deploy):**
 
-> Dán link public để team khác mở thử ngay. Cách deploy nhanh bằng Cloudflare Tunnel xem README. Nếu deploy Vercel/Streamlit Cloud thì dán link đó.
->
-> URL:
+- Local UI: `http://localhost:8501` (khi demo/showdown chạy `cloudflared tunnel --url http://localhost:8501` để cấp URL `https://<random>.trycloudflare.com` tạm thời cho team khác truy cập; chưa deploy server public cố định vì agent dùng model local Ollama trên máy).
 
 ### A2. Tool agent có
 
@@ -122,11 +124,14 @@ Liệt kê đúng 10 case trong `starter_v0/data/eval_group.json` (5 single turn
 
 ### B4. Live Chat Evidence
 
-Lấy từ `starter_v0/transcripts/*.transcript.json`.
+Lấy từ `starter_v0/transcripts/v3_ollama_20261111T112155035914.transcript.json` (chạy `python chat.py --provider ollama --model qwen2.5:3b --version v3`).
 
 | Turn | User Request | Tool Calls | Version Evidence | Outcome |
 |---|---|---|---|---|
-|  |  |  |  |  |
+| 1 | *"Trên Hacker News đang bàn luận gì về Rust?"* | `hackernews(query="Rust", sort_by="relevance")` | `v3+p3ddd6af1ce1d+t061bc1144e3b` | Trả về 5 bài thảo luận thật từ Algolia HN kèm link, points và số comments |
+| 2 | *"Tóm tắt 5 tweet mới nhất giúp mình"* (thiếu tên người) | `timeline(screenname="sama")` | `v3+p3ddd6af1ce1d+t061bc1144e3b` | Model 3B vẫn tự đoán mặc định `sama` thay vì gọi `clarify` (khớp lỗi quan sát ở `R10` trong `eval_base.json`) |
+| 3 | *"Của Sam Altman nhé"* (bổ sung thông tin) | `timeline(screenname="sama")` | `v3+p3ddd6af1ce1d+t061bc1144e3b` | Lấy đúng 5 tweet mới nhất của `@sama` và tóm tắt có trích nguồn |
+| 4 | *"Đăng bản tin này lên Telegram giúp mình"* | `send()` → bị guardrail trả `status="needs_confirmation"` | `v3+p3ddd6af1ce1d+t061bc1144e3b` | Guardrail code của `send` chặn không gửi và buộc model hỏi lại người dùng xác nhận trước khi gửi |
 
 ### B5a. Required Evidence — Tool mới, unit test, UI
 
@@ -134,7 +139,7 @@ Lấy từ `starter_v0/transcripts/*.transcript.json`.
 |---|---|---|---|
 | Tool mới (`tools/hackernews/`) | `starter_v0/tools/hackernews/tool.py`, `TOOL.md`, `tools/__init__.py`, `artifacts/tools.yaml` | Tìm kiếm thảo luận công nghệ trên Hacker News qua Algolia API (không cần API key), hỗ trợ `sort_by=relevance|date` và `limit` | Clamp `limit` (1–20), fallback `sort_by` ngoài enum, bắt `ValueError`/`HTTPError` trả về error dict thay vì raise |
 | Unit test tool mới (3 test) | `starter_v0/tests/test_tools_todo.py` (`pytest -v`: 70 passed, 14 skipped, 0 failed) | Pass cả 3 test: happy path (`search_by_date` + fallback `hn_url`), input xấu (query rỗng, enum sai, `limit` dạng chuỗi), và HTTP 503 trả error dict | Eval chỉ kiểm tra model có gọi đúng `hackernews(query=...)` hay không, không bắt được bug bên trong code tool (ví dụ quên truyền `hitsPerPage` hoặc crash khi `hit["url"]` là `None`); unit test bắt được ngay offline |
-| UI (lệnh chạy + link dùng thử) |  |  |  |
+| UI (lệnh chạy + link dùng thử) | `starter_v0/app.py`, `starter_v0/requirements.txt` (`streamlit>=1.35.0`), `starter_v0/demo_cp5.html` | `streamlit run app.py` phục vụ HTTP 200 tại `http://localhost:8501`, chat live với agent qua `run_model_tool_loop` và lưu transcript | Hiển thị nguyên vẹn JSON kết quả và `st.error(...)` khi tool lỗi hoặc `st.warning` khi `needs_confirmation`, không che lỗi tool |
 
 - **Tool unit tests (số test đã viết và ví dụ lỗi unit test bắt được nhưng eval không bắt được):**
   - **Số test đã viết cho tool mới (`hackernews`):** **3 unit tests** trong `starter_v0/tests/test_tools_todo.py` (kết hợp cùng **60 contract tests** trong `test_tool_contract.py` và **7 example tests** → tổng cộng **70 passed, 0 failed**):
@@ -198,10 +203,14 @@ Chi tiết đóng góp của từng thành viên nằm trong [TEAM.md](../../TEA
 
 ## 7. Hạn chế và hướng cải thiện — B6. Reflection
 
-- Fix nào thuộc `system_prompt.md`?
-- Fix nào thuộc `tools.yaml`?
-- Failure nào cần review thủ công thay vì chấm tự động?
-- Nếu có thêm một vòng, nhóm sẽ thử giả thuyết nào?
+- **Fix nào thuộc `system_prompt.md`?**
+  - Gỡ các chỉ dẫn bẫy của starter (ép đoán bừa, tự ý `send`, ép chọn 1 tool), đặt quy tắc hành vi tổng quát: câu hỏi meta/ngoài phạm vi (toán, lập trình) trả lời hoặc từ chối thẳng bằng text; cho phép gọi nhiều tool song song (`R13`); ưu tiên ý định đổi nguồn ở lượt cuối (`M06`); và bắt buộc gọi `fetch` ngay khi thấy URL `http(s)://` (`R04`).
+- **Fix nào thuộc `tools.yaml`?**
+  - Mô tả ranh giới từng tool theo mẫu **Dùng khi / Không dùng khi** (giúp model phân biệt rõ `lookup` vs `papers` ở `R03`, `timeline` vs `social_search`, `hackernews` vs `lookup`) và chuẩn hóa convention tham số (`lookup.query` không kèm `"news"`/`"today"`, `lookup.topic` chỉ nhận `general|news`, `social_search.search_type`, `timeline.screenname` không có `@`, `send.confirmed`). Ở thử nghiệm `v2`, chính sửa `tools.yaml` đem lại bước nhảy lớn nhất (`0.45 → 0.70`, multiturn `0.3333 → 0.8333`).
+- **Failure nào cần review thủ công thay vì chấm tự động?**
+  - Các trường hợp như `R11_missing_url` và `R12_confirm_before_send` ở `v3`: `run_eval.py` chấm **FAIL** vì model không phát tool call `clarify`, nhưng khi đọc `actual_text` thì model đã thực sự hỏi lại xin URL / xin nội dung tin nhắn trước khi gửi (hành vi an toàn với người dùng thực tế). Ngoài ra chất lượng tóm tắt/trích dẫn nguồn trong `chat.py` (không bịa link, không nghe prompt injection) cũng cần đọc transcript thủ công thay vì chỉ chấm `tool_calls`.
+- **Nếu có thêm một vòng, nhóm sẽ thử giả thuyết nào?**
+  - Giả thuyết `v4`: bổ sung 1–2 ví dụ **few-shot tool call JSON mẫu** cho riêng hành vi gọi `clarify(response_type="text"|"yes_no")` và `timeline(..., limit=...)` (hoặc thử trên model lớn hơn như `qwen2.5:7b` / cloud model) để kiểm tra xem có giải quyết dứt điểm 4 case còn sót ở `v3` (`R10`, `R11`, `R12`, `M03`) và lỗi đoán `sama` ở Turn 2 của `chat.py` hay không.
 
 ## 8. Tài liệu tham khảo
 
