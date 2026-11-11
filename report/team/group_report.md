@@ -8,7 +8,7 @@
 
 ## 1. Thông tin nhóm
 
-- Tên nhóm:
+- Tên nhóm: BLG
 - Thành viên và phân công: xem [TEAM.md](../../TEAM.md)
 - Provider/model dùng cho v0–v3: `ollama` (`qwen2.5:3b`)
 
@@ -36,9 +36,17 @@ Ví dụ: "Research agent: tìm tin theo từ khóa / theo tài khoản, đọc 
 
 | Tên tool | Làm được gì | Tool mới nhóm thêm? |
 |---|---|---|
-| clarify | hỏi lại người dùng khi thiếu thông tin | không |
-|  |  |  |
-|  |  |  |
+| `clarify` | Hỏi lại người dùng khi thiếu thông tin (`text`/`choice`) hoặc xin xác nhận (`yes_no`) | không |
+| `timeline` | Lấy các tweet gần đây của một tài khoản Twitter/X cụ thể | không |
+| `social_search` | Tìm tweet theo từ khóa/chủ đề (`Latest` hoặc `Top`) | không |
+| `lookup` | Tìm kiếm thông tin và tin tức trên web qua Tavily (`general`/`news`, lọc `timeframe`) | không |
+| `fetch` | Đọc và trích xuất nội dung trực tiếp từ một URL cụ thể qua Firecrawl | không |
+| `format` | Trình bày danh sách kết quả đã thu thập thành markdown digest | không |
+| `send` | Gửi bản tin lên kênh Telegram (chỉ thực hiện khi `confirmed=true`) | không |
+| `policy` | Tra cứu tài liệu chính sách nội bộ công ty (`company_policy/*.md`) | không |
+| `papers` | Tìm bài báo khoa học trên arXiv | không |
+| `paper_text` | Tải PDF và trích xuất nội dung text từ bài báo arXiv | không |
+| `hackernews` | Tìm bài thảo luận công nghệ trên Hacker News qua Algolia HN API (`relevance`/`date`) | **có (CP3)** |
 
 ### A3. Câu hỏi mẫu để thử
 
@@ -52,7 +60,16 @@ Ví dụ: "Research agent: tìm tin theo từ khóa / theo tài khoản, đọc 
 
 > Tóm tắt các thay đổi chính trong `starter_v0/artifacts/system_prompt.md` và `starter_v0/artifacts/tools.yaml`, và tool mới nhóm viết (tên, làm gì, khi nào agent nên gọi).
 
--
+- **Thay đổi trong `starter_v0/artifacts/system_prompt.md` (`v1`, `v3`):**
+  - Gỡ bỏ các chỉ dẫn bẫy của starter (tự đoán handle `sama`/URL khi thiếu thông tin, tự ý `send` không hỏi lại, ép chỉ chọn 1 tool).
+  - Thêm quy tắc routing rõ ràng: câu hỏi meta và ngoài phạm vi (toán, lập trình) trả lời/từ chối thẳng bằng text (không gọi tool hay `clarify`); thiếu handle/URL hoặc chưa xác nhận `send` bắt buộc gọi tool `clarify`; có `http(s)://` URL bắt buộc gọi `fetch`; cho phép gọi song song `lookup` + `social_search` khi user hỏi cả web và Twitter; ưu tiên chỉ dẫn đổi nguồn ở lượt hội thoại mới nhất.
+  - Bổ sung bảng map handle (`Sam Altman` → `sama`, `Elon Musk` → `elonmusk`, `Andrej Karpathy` → `karpathy`) và nhắc truyền `limit` khi user nêu số lượng tweet.
+- **Thay đổi trong `starter_v0/artifacts/tools.yaml` (`v2`):**
+  - Viết lại toàn bộ `description` ngắn gọn theo mẫu **Dùng khi / Không dùng khi** để phù hợp context nhỏ của model 3B.
+  - Chuẩn hóa convention tham số: `lookup.query` chỉ giữ từ khóa ngắn (không lặp `"news"`/`"today"`), `lookup.topic` chỉ nhận `general`/`news`, `social_search.search_type` phân biệt `Top`/`Latest`, `timeline.screenname` không có `@`, và `send` yêu cầu `confirmed=true` sau khi user xác nhận qua `clarify(response_type="yes_no")`.
+- **Tool mới nhóm viết — `hackernews` (`starter_v0/tools/hackernews/`):**
+  - Tìm các bài thảo luận công nghệ/AI trên Hacker News qua Algolia HN Search API (`hn.algolia.com`, không cần API key), hỗ trợ `sort_by` (`relevance`/`date`) và `limit` (clamp `1..20`).
+  - Agent nên gọi `hackernews` khi người dùng hỏi rõ về bài viết/thảo luận trên Hacker News (không dùng thay cho `lookup` tin web chung hay `social_search` trên Twitter).
 
 ## 4. Kết quả — PHẦN B: Chi tiết và bằng chứng
 
@@ -155,7 +172,9 @@ Lỗi đặc thù của model nhỏ (đếm từ run JSON):
 
 > Khó khăn chính và cách nhóm xử lý. Nếu gặp lỗi kỹ thuật (provider lỗi, hết quota API, tool không chạy), mô tả lỗi và dẫn bằng chứng: run JSON, log, ảnh chụp.
 
--
+- **Hết quota & lỗi quá tải của Gemini API Free Tier:** Khi chạy thử với provider `gemini`, model mặc định `gemini-3.8-flash` gặp `503 UNAVAILABLE` (high demand), còn `gemini-3.6-flash` bị giới hạn Free Tier **20 requests/ngày** theo project (`429 RESOURCE_EXHAUSTED`, làm lần chạy `eval_base.json` thứ hai chỉ đo được 3/20 case). Nhóm xử lý bằng cách cài model local **Ollama (`qwen2.5:3b`)** để chạy toàn bộ `v0–v3` ổn định với `provider_error_cases == 0`.
+- **Timeout trên CPU khi schema tool quá dài (`v2`):** Khi viết mô tả ở `tools.yaml` quá dài khiến `qwen2.5:3b` (context `4096` trên CPU) bị `ReadTimeout` tại case `R08_out_of_scope`. Nhóm rút gọn lại mô tả trong `tools.yaml` ngắn, súc tích (`55 passed` contract tests) thì chạy thông suốt toàn bộ 20 cases (`case_accuracy` tăng lên `0.70`, rồi `0.80` ở `v3`).
+- **Giới hạn của model nhỏ 3B:** Ở `v3` vẫn còn 4/20 case chưa đạt (`R10` tự đoán `techcrunch`, `R11`/`R12` biết hỏi lại bằng text nhưng không phát tool call `clarify`, `M03` thiếu `limit=3`), phản ánh đúng đánh đổi giữa chi phí/offline và năng lực tool-calling của model 3B.
 
 ## 6. Tổng hợp đóng góp
 
